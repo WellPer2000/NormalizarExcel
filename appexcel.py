@@ -21,7 +21,7 @@ def gerar_excel_para_download(df):
     return output.getvalue()
 
 # Interface Streamlit
-st.title("Normalizador de Arquivos Excel")
+st.title("Normalizador de Arquivos Excel V2")
 
 # Upload do arquivo Excel
 arquivo_carregado = st.file_uploader("Envie o arquivo Excel", type=["xlsx"])
