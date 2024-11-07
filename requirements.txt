@@ -52,3 +52,4 @@ urllib3==2.2.3
 watchdog==4.0.2
 xlsxwriter
 groq
+pandas
