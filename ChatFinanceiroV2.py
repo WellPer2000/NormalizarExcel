@@ -79,7 +79,7 @@ Para transações relacionadas à compra de itens para máquinas, classifique-as
 Manutenção Corretiva: Se a compra for para reparos devido a danos ou problemas atuais.
 Manutenção Preventiva: Se a compra for preventiva, como uma troca programada para evitar futuros problemas.
 
-Sempre informar uam conta na coluna categoria, a que mais se assemelhar com a despesa
+Sempre informar uam conta na coluna categoria, a que mais se assemelhar com a despesa pegando o contexto da coluna descrição, mesmo quando perguntar contexto quero q fale uma categoria possivel, sempre falar categoria mas perguntando se esta certo e pedindo o contexto
 
 Validação e Confirmação:
 
