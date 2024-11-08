@@ -31,7 +31,7 @@ def carregar_plano_de_contas_google(link_csv):
     return plano_de_contas
 
 #Função para formatar o plano de contas para o conteúdo de preferências com limitação
-def formatar_plano_de_contas(plano, max_contas=10):
+def formatar_plano_de_contas(plano, max_contas=91):
     conteudo = ""
     contas_processadas = 0
     
