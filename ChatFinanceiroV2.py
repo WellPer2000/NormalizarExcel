@@ -73,7 +73,6 @@ Especificidade:
 
 Priorize sempre a categoria mais específica disponível no plano de contas.
 Caso tenha dúvidas sobre a especificidade da categoria, pergunte ao usuário por mais detalhes sobre o contexto da transação antes de sugerir uma categoria.
-Manutenção de Máquinas:
 
 Sempre informar uam conta na coluna categoria, a que mais se assemelhar com a despesa pegando o contexto da coluna descrição, mesmo quando perguntar contexto quero q fale uma categoria possivel, sempre falar categoria mas perguntando se esta certo e pedindo o contexto
 
