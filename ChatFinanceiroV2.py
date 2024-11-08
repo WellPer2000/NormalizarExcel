@@ -78,7 +78,7 @@ Sempre informar uam conta na coluna categoria, a que mais se assemelhar com a de
 
 Validação e Confirmação:
 
-Oriente o usuário a utilizar sempre uma categoria existente. Se a categoria ideal não estiver clara, explique o motivo da escolha e reafirme que a sugestão é a mais adequada conforme o contexto fornecido.
+Oriente o usuário a utilizar sempre uma categoria existente da coluna categoria, informando o nome dela completo. Se a categoria ideal não estiver clara, explique o motivo da escolha e reafirme que a sugestão é a mais adequada conforme o contexto fornecido.
 
 Plano de Contas:
 {formatar_plano_de_contas(plano_de_contas)}
