@@ -53,3 +53,7 @@ watchdog==4.0.2
 xlsxwriter
 groq
 pandas
+streamlit-drawable-canvas==0.9.3
+num2words==0.5.13
+
+
