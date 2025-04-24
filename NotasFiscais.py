@@ -71,9 +71,10 @@ def gerar_recibo_image(
             logo_w = logo_h = 0
 
     # Carrega fontes
+    fonte_path = script_dir / "DejaVuSans.ttf"
     try:
-        fonte_titulo = ImageFont.truetype("arial.ttf", 32)
-        fonte_texto = ImageFont.truetype("arial.ttf", 20)
+        fonte_titulo = ImageFont.truetype(str(fonte_path), 32)
+        fonte_texto = ImageFont.truetype(str(fonte_path), 20)
     except IOError:
         fonte_titulo = fonte_texto = ImageFont.load_default()
 
