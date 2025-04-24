@@ -103,7 +103,7 @@ def gerar_recibo_image(
     # Inserir assinatura
     assinatura_w, assinatura_h = 300, 100
     assin = assinatura_img.resize((assinatura_w, assinatura_h))
-    assinatura_y = assinatura_label_y + 5
+    assinatura_y = assinatura_label_y + 20
     mask_assin = assin.split()[3] if assin.mode in ("RGBA", "LA") else None
     img.paste(assin, (20, assinatura_y), mask_assin)
 
