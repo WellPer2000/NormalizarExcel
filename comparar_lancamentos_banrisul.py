@@ -163,38 +163,17 @@ DE_PARA_POSTOS = {
     "PERIMETRAL": None  # Sem pasta mapeada no OneDrive
 }
 
-# Lista de empresas do Sistema MR (carregada do Streamlit Secrets com fallback local)
-empresas_carregadas = False
+# Lista de empresas do Sistema MR (carregada obrigatoriamente do Streamlit Secrets)
+EMPRESAS = []
 try:
     if "EMPRESAS" in st.secrets:
         EMPRESAS = list(st.secrets["EMPRESAS"])
-        empresas_carregadas = True
 except Exception:
     pass
 
-if not empresas_carregadas:
-    EMPRESAS = [
-        {"postoId": "772644ba-3a49-4736-8443-f057581d6b39", "codigo": "1", "nome": "ARARANGUÁ", "descricao": "POSTO ROTA 101 ARARANGUA DERIVADOS DE PETROLEO LTDA", "cnpj": "14.959.998/0001-60"},
-        {"postoId": "1db3be97-a6d6-484a-b75b-fc1bdc6c487a", "codigo": "10", "nome": "BARRA DO TURVO", "descricao": "POSTO ROTA 116 BARRA DO TURVO DERIVADOS DE PETROLEO LTDA", "cnpj": "61.055.444/0001-19"},
-        {"postoId": "b2107e4f-59a7-44a0-9a84-d81abaab5ad2", "codigo": "14", "nome": "CANDIOTA", "descricao": "AGUIA ABASTECEDORA DE COMBUSTIVEIS LTDA", "cnpj": "10.401.915/0002-43"},
-        {"postoId": "980a075e-6c02-43fe-93b5-3280caeb0d94", "codigo": "16", "nome": "CANOAS", "descricao": "AGUIA ABASTECEDORA DE COMBUSTIVEIS LTDA (CANOAS)", "cnpj": "10.401.915/0003-24"},
-        {"postoId": "7a078786-1d9e-4433-9d63-8dfc58130b5f", "codigo": "9", "nome": "CRISTAL", "descricao": "POSTO ROTA 290 CRISTAL DER DE PETROLEO LTDA", "cnpj": "48.626.703/0001-56"},
-        {"postoId": "93f44c44-bfd4-417f-bad2-20933e5c0228", "codigo": "5", "nome": "ELDORADO", "descricao": "POSTO ROTA 116 ELDORADO DERIVADOS DE PETROLEO LTDA", "cnpj": "73.856.155/0001-06"},
-        {"postoId": "bf308d74-c97f-42e9-98c8-ef14d0ddad2d", "codigo": "15", "nome": "GRAVATAI", "descricao": "ROTA COMERCIO DE COMBUSTIVEIS GRAVATAI ", "cnpj": "32.627.270/0003-85"},
-        {"postoId": "149653c2-f107-4c60-aad0-b034789c8504", "codigo": "4", "nome": "JAGUARUNA", "descricao": "POSTO ROTA 101 JAGUARUNA DERIVADOS DE PETROLEO LTDA", "cnpj": "28.161.876/0001-39"},
-        {"postoId": "735b6b4e-5513-4bb5-a9c4-50d92462921d", "codigo": "6", "nome": "PARADOURO", "descricao": "POSTO ROTA 101 PARADOURO DERIVADOS DE PETROLEO LTDA", "cnpj": "28.583.917/0002-66"},
-        {"postoId": "cad79622-124a-4dc0-9408-7da5227576f0", "codigo": "98", "nome": "PARADOURO RESTAURANTE", "descricao": "ROTA PARADOURO 86 RESTAURANTE LTDA", "cnpj": "28.583.917/0004-28"},
-        {"postoId": "5b9cc3c5-b585-43dd-89cc-731015b3b929", "codigo": "8", "nome": "PERIMETRAL", "descricao": "POSTO ROTA PERIMETRAL DERIVADOS PETROLEO LTDA", "cnpj": "45.104.962/0001-29"},
-        {"postoId": "a13229ca-0f8a-442a-91ab-27e0adc1810b", "codigo": "11", "nome": "PINHEIRO MACHADO", "descricao": "POSTO ROTA 293 PINHEIRO MACHADO", "cnpj": "73.856.155/0002-89"},
-        {"postoId": "85d3091d-af31-4cb5-86fc-1558aaefa19b", "codigo": "12", "nome": "POA IPIRANGA", "descricao": "POSTO DE COMB AVENIDA IPIRANGA LTDA", "cnpj": "32.627.270/0002-02"},
-        {"postoId": "73a32cc3-d7ac-48d7-91d7-9046045d0bd7", "codigo": "3", "nome": "PORTO ALEGRE", "descricao": "ROTA POA COMERCIO DE COMBUSTIVEIS LTDA", "cnpj": "32.627.270/0001-13"},
-        {"postoId": "fb3db4cb-742b-4583-aaff-c6faa66c0605", "codigo": "18", "nome": "PROTÁSIO", "descricao": "AGUIA ABASTECEDORA DE COMBUSTIVEIS LTDA (PROTÁSIO)", "cnpj": "10.401.915/0004-05"},
-        {"postoId": "d5ecbd61-8d4a-4ac6-8cc9-7c4919ead401", "codigo": "7", "nome": "ROTA DO SOL", "descricao": "POSTO ROTA 101 DERIVADOS DE PETROLEO LTDA", "cnpj": "28.583.917/0003-47"},
-        {"postoId": "eb84222f-2e6b-4f68-8457-760d10e24043", "codigo": "13", "nome": "SEBERI", "descricao": "ROTA - SEBERI - BANCO DO BRASIL", "cnpj": "59.425.936/0001-07"},
-        {"postoId": "4d49850f-ebf1-433d-a32a-527b54e856aa", "codigo": "2", "nome": "TERRA DE AREIA", "descricao": "POSTO ROTA 101 DERIVADOS DE PETROLEO LTDA", "cnpj": "28.583.917/0001-85"},
-        {"postoId": "3885ddf8-f0ac-4468-98ab-97a248e29150", "codigo": "99", "nome": "TRANSPORTADORA", "descricao": "ROTA TRANSPORTES E LOGISTICA LTDA", "cnpj": "39.327.681/0001-32"},
-        {"postoId": "31147749-9465-49bc-acbd-cca61eae2e3a", "codigo": "17", "nome": "VIAMÃO", "descricao": "AGUIA ABASTECEDORA DE COMBUSTIVEIS LTDA", "cnpj": "10.401.915/0001-62"}
-    ]
+if not EMPRESAS:
+    st.error("❌ A lista de EMPRESAS não foi configurada nos Secrets do Streamlit. Por favor, adicione os segredos nas configurações do app.")
+    st.stop()
 
 # Funcao de autenticacao MSAL
 @st.cache_data(ttl=3000)
