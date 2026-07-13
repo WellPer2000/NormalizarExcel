@@ -73,6 +73,49 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Funcao para verificar credenciais no st.secrets ou fallback local
+def verificar_login(usuario, senha):
+    try:
+        if "users" in st.secrets:
+            users_dict = st.secrets["users"]
+            if usuario in users_dict and users_dict[usuario] == senha:
+                return True
+    except Exception:
+        # st.secrets nao esta configurado localmente
+        pass
+    # Fallback local de seguranca conforme solicitado
+    if usuario == "conciliacao" and senha == "Mr130815@":
+        return True
+    return False
+
+# Inicializacao do estado de login
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+# Tela de login se nao estiver logado
+if not st.session_state["logged_in"]:
+    col_log1, col_log2, col_log3 = st.columns([1, 2, 1])
+    with col_log2:
+        st.markdown('<div style="height: 100px;"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card" style="text-align: center;">'
+                    '<h3>🔑 Acesso ao Conciliador</h3>'
+                    '<p>Digite suas credenciais para acessar o painel</p></div>', unsafe_allow_html=True)
+        
+        user_input = st.text_input("Usuário:", placeholder="Digite seu usuário")
+        password_input = st.text_input("Senha:", type="password", placeholder="Digite sua senha")
+        
+        if st.button("Entrar"):
+            if verificar_login(user_input, password_input):
+                st.session_state["logged_in"] = True
+                st.success("Login efetuado com sucesso!")
+                if hasattr(st, "rerun"):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
+        st.stop()
+
 # Funcao para carregar variaveis do .env
 def carregar_env():
     env_path = Path("c:/Users/wellp/Downloads/Extratores/.env")
@@ -121,9 +164,15 @@ DE_PARA_POSTOS = {
 }
 
 # Lista de empresas do Sistema MR (carregada do Streamlit Secrets com fallback local)
-if "EMPRESAS" in st.secrets:
-    EMPRESAS = list(st.secrets["EMPRESAS"])
-else:
+empresas_carregadas = False
+try:
+    if "EMPRESAS" in st.secrets:
+        EMPRESAS = list(st.secrets["EMPRESAS"])
+        empresas_carregadas = True
+except Exception:
+    pass
+
+if not empresas_carregadas:
     EMPRESAS = [
         {"postoId": "772644ba-3a49-4736-8443-f057581d6b39", "codigo": "1", "nome": "ARARANGUÁ", "descricao": "POSTO ROTA 101 ARARANGUA DERIVADOS DE PETROLEO LTDA", "cnpj": "14.959.998/0001-60"},
         {"postoId": "1db3be97-a6d6-484a-b75b-fc1bdc6c487a", "codigo": "10", "nome": "BARRA DO TURVO", "descricao": "POSTO ROTA 116 BARRA DO TURVO DERIVADOS DE PETROLEO LTDA", "cnpj": "61.055.444/0001-19"},
@@ -365,13 +414,20 @@ with st.sidebar:
             options=opcoes_contas,
             help="Filtrar por uma conta Banrisul específica"
         )
-        
     st.markdown("---")
     st.markdown("**Status da Conexão:**")
     if token:
         st.success("🔑 Autenticação OneDrive: OK")
     else:
         st.error("🔑 Autenticação OneDrive: FALHA")
+        
+    st.markdown("---")
+    if st.button("🚪 Sair / Logout"):
+        st.session_state["logged_in"] = False
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
 
 # Layout de abas principais
 tab_rec, tab_depara = st.tabs(["🔄 Conciliação", "📋 De-Para de Postos"])
@@ -398,36 +454,53 @@ with tab_rec:
     empresa = next(emp for emp in EMPRESAS if emp.get("nome") == empresa_nome)
     posto_id = empresa.get("postoId")
     
-    col_info1, col_info2 = st.columns([1, 2])
-    with col_info1:
-        st.markdown('<div class="card"><h4>Empresa Selecionada</h4>'
-                    f'<p><b>Posto:</b> {empresa.get("nome")}<br>'
-                    f'<b>ID do Sistema:</b> <code style="font-size:0.8rem;">{posto_id}</code><br>'
-                    f'<b>CNPJ:</b> {empresa.get("cnpj")}</p></div>', unsafe_allow_html=True)
-        
-        analisar_button = st.button("Executar Conciliação")
-        
-    with col_info2:
-        # Mostra os status dos arquivos que serao lidos
-        st.markdown("#### Status dos Arquivos PDF correspondentes no OneDrive")
-        if not pasta_cliente:
-            st.warning(f"Nenhuma pasta mapeada para o posto '{empresa_nome}' no OneDrive ou pasta inexistente.")
-        else:
-            # Filtra os PDFs pelo filtro de conta
-            if conta_selecionada != "Todos":
-                pdfs_filtrados_conta = [p for p in pdfs_cliente if p.get("account") == conta_selecionada]
-            else:
-                pdfs_filtrados_conta = pdfs_cliente
-                
-            pdfs_periodo = [p for p in deduplicar_pdfs(pdfs_filtrados_conta) if arquivo_sobrepoe_datas(p.get("name"), start_date, end_date)]
-            if pdfs_periodo:
-                for p in pdfs_periodo:
-                    acc_label = f"({p.get('account')})" if p.get('account') != "Padrão" else ""
-                    st.write(f"📄 {p.get('name')} {acc_label}")
-            else:
-                st.info("Nenhum arquivo PDF encontrado no período selecionado.")
+    # Linha única horizontal e minimalista com informações do cliente e botão
+    col_btn, col_meta = st.columns([1, 4])
+    with col_btn:
+        analisar_button = st.button("🔄 Executar Conciliação")
+    with col_meta:
+        st.markdown(
+            f"<div style='padding-top: 8px; font-size: 0.9rem; color: #94a3b8;'>"
+            f"🏢 <b>Empresa:</b> {empresa.get('nome')} &nbsp;|&nbsp; "
+            f"<b>CNPJ:</b> {empresa.get('cnpj')} &nbsp;|&nbsp; "
+            f"<b>ID:</b> <code style='font-size:0.8rem;'>{posto_id}</code>"
+            f"</div>", 
+            unsafe_allow_html=True
+        )
 
-    st.markdown("---")
+    # Detalhe discreto dos arquivos PDF identificados no OneDrive
+    if pasta_cliente:
+        if conta_selecionada != "Todos":
+            pdfs_filtrados_conta = [p for p in pdfs_cliente if p.get("account") == conta_selecionada]
+        else:
+            pdfs_filtrados_conta = pdfs_cliente
+            
+        pdfs_periodo = [p for p in deduplicar_pdfs(pdfs_filtrados_conta) if arquivo_sobrepoe_datas(p.get("name"), start_date, end_date)]
+        if pdfs_periodo:
+            qtd_pdfs = len(pdfs_periodo)
+            nomes_pdf = ", ".join(f"{p.get('name')}" + (f" ({p.get('account')})" if p.get('account') != "Padrão" else "") for p in pdfs_periodo)
+            st.markdown(
+                f"<div style='font-size: 0.85rem; color: #64748b; margin-top: -0.5rem; margin-bottom: 0.75rem;'>"
+                f"📂 <b>Arquivos identificados no OneDrive ({qtd_pdfs}):</b> {nomes_pdf}"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"<div style='font-size: 0.85rem; color: #f43f5e; margin-top: -0.5rem; margin-bottom: 0.75rem;'>"
+                f"⚠️ Nenhum arquivo PDF encontrado no período selecionado."
+                f"</div>",
+                unsafe_allow_html=True
+            )
+    else:
+        st.markdown(
+            f"<div style='font-size: 0.85rem; color: #f43f5e; margin-top: -0.5rem; margin-bottom: 0.75rem;'>"
+            f"⚠️ Nenhuma pasta mapeada para o posto '{empresa_nome}' no OneDrive."
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+    st.markdown("<hr style='margin: 0.5rem 0;'/>", unsafe_allow_html=True)
 
     if analisar_button:
         # Se nao houver pasta ou token
@@ -552,15 +625,20 @@ with tab_rec:
             else:
                 df_resultado = pd.DataFrame(tabela_conciliada)
                 
-                # Métricas de Conciliação
-                st.markdown("### Métricas de Conciliação")
-                mc1, mc2, mc3 = st.columns(3)
-                mc1.metric("Lançamentos Sistema", len(df_resultado))
-                mc2.metric("Conciliados (Match PDF)", f"{matched_count} ({matched_count/len(df_resultado)*100:.1f}%)")
-                mc3.metric("Não Conciliados", f"{unmatched_count} ({unmatched_count/len(df_resultado)*100:.1f}%)")
+                # Métricas de Conciliação (Inline e Minimalista)
+                total_tx = len(df_resultado)
+                pct_match = (matched_count / total_tx * 100) if total_tx > 0 else 0.0
+                pct_unmatch = (unmatched_count / total_tx * 100) if total_tx > 0 else 0.0
                 
-                st.markdown("---")
-                st.markdown("### Tabela Comparativa de Conciliação")
+                st.markdown(
+                    f"<div style='background-color: #1e293b; padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid #334155; font-size: 0.95rem; margin-bottom: 0.75rem; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 10px;'>"
+                    f"<span style='color: #f8fafc;'>📊 <b>Lançamentos Sistema:</b> {total_tx}</span>"
+                    f"<span style='color: #4ade80;'>✅ <b>Conciliados (Match PDF):</b> {matched_count} ({pct_match:.1f}%)</span>"
+                    f"<span style='color: #f43f5e;'>❌ <b>Não Conciliados:</b> {unmatched_count} ({pct_unmatch:.1f}%)</span>"
+                    f"</div>", 
+                    unsafe_allow_html=True
+                )
+                st.markdown("<div style='font-size: 1.1rem; font-weight: bold; color: #f8fafc; margin-top: 0.5rem; margin-bottom: 0.5rem;'>Tabela Comparativa de Conciliação</div>", unsafe_allow_html=True)
                 
                 # Formata exibição da tabela
                 df_exibicao = df_resultado.copy()
