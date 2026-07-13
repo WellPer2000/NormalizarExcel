@@ -403,18 +403,7 @@ with st.sidebar:
     if folder_onedrive_name and pastas_onedrive:
         pasta_cliente = next((p for p in pastas_onedrive if norm(p.get("name")) == norm(folder_onedrive_name)), None)
     
-    # Debug temporário — exibe diagnóstico de conexão na sidebar
-    with st.sidebar:
-        st.markdown("---")
-        with st.expander("🔍 Debug de Conexão", expanded=False):
-            st.write(f"**Empresa selecionada:** `{empresa_nome_norm}`")
-            st.write(f"**Pasta mapeada:** `{folder_onedrive_name}`")
-            st.write(f"**DRIVE_ID:** `{DRIVE_ID[:30] if DRIVE_ID else 'None'}...`")
-            st.write(f"**FOLDER_ID:** `{FOLDER_ID[:20] if FOLDER_ID else 'None'}...`")
-            st.write(f"**Pastas OneDrive encontradas:** {len(pastas_onedrive)}")
-            if pastas_onedrive:
-                st.write("Nomes:", [p.get('name') for p in pastas_onedrive[:5]])
-            st.write(f"**Pasta cliente:** `{pasta_cliente.get('name') if pasta_cliente else 'None'}`")
+
 
     # Identificacao de subpastas/contas para o cliente no OneDrive
     contas_disponiveis = ["Padrão"]
@@ -459,11 +448,9 @@ with tab_depara:
     dados_depara = []
     for emp_sys in EMPRESAS:
         sys_nome = emp_sys.get("nome")
-        sys_id = emp_sys.get("postoId")
         od_folder = DE_PARA_POSTOS.get(sys_nome, "Não mapeado")
         dados_depara.append({
             "Nome no Sistema MR": sys_nome,
-            "ID no Sistema": sys_id,
             "Pasta no OneDrive": od_folder if od_folder else "⚠️ Sem Pasta Mapeada"
         })
     df_depara_table = pd.DataFrame(dados_depara)
@@ -482,8 +469,7 @@ with tab_rec:
         st.markdown(
             f"<div style='padding-top: 8px; font-size: 0.9rem; color: #94a3b8;'>"
             f"🏢 <b>Empresa:</b> {empresa.get('nome')} &nbsp;|&nbsp; "
-            f"<b>CNPJ:</b> {empresa.get('cnpj')} &nbsp;|&nbsp; "
-            f"<b>ID:</b> <code style='font-size:0.8rem;'>{posto_id}</code>"
+            f"<b>CNPJ:</b> {empresa.get('cnpj')}"
             f"</div>", 
             unsafe_allow_html=True
         )
