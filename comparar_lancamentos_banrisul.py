@@ -129,15 +129,24 @@ def carregar_env():
 
 carregar_env()
 
-# Configuracoes do Microsoft Graph
-TENANT_ID = os.environ.get("TENANT_ID") 
-CLIENT_ID = os.environ.get("CLIENT_ID") 
-CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
-DRIVE_ID = os.environ.get("ONEDRIVE_DRIVE_ID")
-FOLDER_ID = os.environ.get("ONEDRIVE_FOLDER_ID")
+# Helper para obter configuracoes do st.secrets (Streamlit Cloud) com fallback para os.environ (.env local)
+def obter_config(key, default=None):
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return os.environ.get(key, default)
 
-API_URL = os.environ.get("API_URL")
-API_KEY = os.environ.get("API_KEY")
+# Configuracoes do Microsoft Graph
+TENANT_ID = obter_config("TENANT_ID") 
+CLIENT_ID = obter_config("CLIENT_ID") 
+CLIENT_SECRET = obter_config("CLIENT_SECRET")
+DRIVE_ID = obter_config("ONEDRIVE_DRIVE_ID")
+FOLDER_ID = obter_config("ONEDRIVE_FOLDER_ID")
+
+API_URL = obter_config("API_URL")
+API_KEY = obter_config("API_KEY")
 
 # De-Para de Postos (Mapeamento Sistema MR -> Pastas OneDrive)
 DE_PARA_POSTOS = {
