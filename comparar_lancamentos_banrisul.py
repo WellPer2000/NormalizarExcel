@@ -1,0 +1,593 @@
+import os
+import re
+import msal
+import requests
+import urllib.parse
+import pandas as pd
+import streamlit as st
+import pypdf
+import io
+import calendar
+from datetime import datetime
+from pathlib import Path
+
+# Configuracao da pagina do Streamlit
+st.set_page_config(
+    page_title="Reconciliação Financeira",
+    page_icon="🔄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Estilizacao CSS personalizada para tema escuro e visual premium
+st.markdown("""
+<style>
+    .stButton>button {
+        background-color: #38bdf8;
+        color: #0f172a;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        border: none;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    .stButton>button:hover {
+        background-color: #7dd3fc;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(56, 189, 248, 0.2);
+    }
+    .card {
+        background-color: #1e293b;
+        color: #f8fafc;
+        padding: 1.25rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.25rem;
+        border: 1px solid #334155;
+    }
+    .card h3, .card h4 {
+        color: #f8fafc !important;
+        margin-top: 0;
+        margin-bottom: 0.5rem;
+    }
+    .card p {
+        color: #cbd5e1 !important;
+        margin-bottom: 0;
+    }
+    .header-title {
+        color: #38bdf8;
+        font-size: 2.25rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+    .header-subtitle {
+        color: #94a3b8;
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+    }
+    .stDataFrame {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Funcao para carregar variaveis do .env
+def carregar_env():
+    env_path = Path("c:/Users/wellp/Downloads/Extratores/.env")
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, val = line.split("=", 1)
+                    os.environ[key.strip()] = val.strip()
+
+carregar_env()
+
+# Configuracoes do Microsoft Graph
+TENANT_ID = os.environ.get("TENANT_ID") 
+CLIENT_ID = os.environ.get("CLIENT_ID") 
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+DRIVE_ID = os.environ.get("ONEDRIVE_DRIVE_ID")
+FOLDER_ID = os.environ.get("ONEDRIVE_FOLDER_ID")
+
+API_URL = os.environ.get("API_URL")
+API_KEY = os.environ.get("API_KEY")
+
+# De-Para de Postos (Mapeamento Sistema MR -> Pastas OneDrive)
+DE_PARA_POSTOS = {
+    "ARARANGUÁ": "Ararangua",
+    "BARRA DO TURVO": "São Paulo",
+    "CANDIOTA": "Candiota",
+    "CANOAS": "Canoas",
+    "CRISTAL": "Cristal",
+    "ELDORADO": "Eldorado",
+    "GRAVATAI": "Gravataí",
+    "JAGUARUNA": "Jaguaruna",
+    "PARADOURO": "Paradouro",
+    "PARADOURO RESTAURANTE": "Restaurante 86",
+    "PINHEIRO MACHADO": "Pinheiro Machado",
+    "POA IPIRANGA": "Ipiranga",
+    "PORTO ALEGRE": "Porto Alegre",
+    "PROTÁSIO": "Protásio",
+    "ROTA DO SOL": "Caminho do sol",
+    "SEBERI": "Seberi",
+    "TERRA DE AREIA": "Terra de Areia",
+    "TRANSPORTADORA": "Transportadora",
+    "VIAMÃO": "Viamão",
+    "PERIMETRAL": None  # Sem pasta mapeada no OneDrive
+}
+
+# Lista de empresas do Sistema MR (carregada do Streamlit Secrets com fallback local)
+if "EMPRESAS" in st.secrets:
+    EMPRESAS = list(st.secrets["EMPRESAS"])
+else:
+    EMPRESAS = [
+        {"postoId": "772644ba-3a49-4736-8443-f057581d6b39", "codigo": "1", "nome": "ARARANGUÁ", "descricao": "POSTO ROTA 101 ARARANGUA DERIVADOS DE PETROLEO LTDA", "cnpj": "14.959.998/0001-60"},
+        {"postoId": "1db3be97-a6d6-484a-b75b-fc1bdc6c487a", "codigo": "10", "nome": "BARRA DO TURVO", "descricao": "POSTO ROTA 116 BARRA DO TURVO DERIVADOS DE PETROLEO LTDA", "cnpj": "61.055.444/0001-19"},
+        {"postoId": "b2107e4f-59a7-44a0-9a84-d81abaab5ad2", "codigo": "14", "nome": "CANDIOTA", "descricao": "AGUIA ABASTECEDORA DE COMBUSTIVEIS LTDA", "cnpj": "10.401.915/0002-43"},
+        {"postoId": "980a075e-6c02-43fe-93b5-3280caeb0d94", "codigo": "16", "nome": "CANOAS", "descricao": "AGUIA ABASTECEDORA DE COMBUSTIVEIS LTDA (CANOAS)", "cnpj": "10.401.915/0003-24"},
+        {"postoId": "7a078786-1d9e-4433-9d63-8dfc58130b5f", "codigo": "9", "nome": "CRISTAL", "descricao": "POSTO ROTA 290 CRISTAL DER DE PETROLEO LTDA", "cnpj": "48.626.703/0001-56"},
+        {"postoId": "93f44c44-bfd4-417f-bad2-20933e5c0228", "codigo": "5", "nome": "ELDORADO", "descricao": "POSTO ROTA 116 ELDORADO DERIVADOS DE PETROLEO LTDA", "cnpj": "73.856.155/0001-06"},
+        {"postoId": "bf308d74-c97f-42e9-98c8-ef14d0ddad2d", "codigo": "15", "nome": "GRAVATAI", "descricao": "ROTA COMERCIO DE COMBUSTIVEIS GRAVATAI ", "cnpj": "32.627.270/0003-85"},
+        {"postoId": "149653c2-f107-4c60-aad0-b034789c8504", "codigo": "4", "nome": "JAGUARUNA", "descricao": "POSTO ROTA 101 JAGUARUNA DERIVADOS DE PETROLEO LTDA", "cnpj": "28.161.876/0001-39"},
+        {"postoId": "735b6b4e-5513-4bb5-a9c4-50d92462921d", "codigo": "6", "nome": "PARADOURO", "descricao": "POSTO ROTA 101 PARADOURO DERIVADOS DE PETROLEO LTDA", "cnpj": "28.583.917/0002-66"},
+        {"postoId": "cad79622-124a-4dc0-9408-7da5227576f0", "codigo": "98", "nome": "PARADOURO RESTAURANTE", "descricao": "ROTA PARADOURO 86 RESTAURANTE LTDA", "cnpj": "28.583.917/0004-28"},
+        {"postoId": "5b9cc3c5-b585-43dd-89cc-731015b3b929", "codigo": "8", "nome": "PERIMETRAL", "descricao": "POSTO ROTA PERIMETRAL DERIVADOS PETROLEO LTDA", "cnpj": "45.104.962/0001-29"},
+        {"postoId": "a13229ca-0f8a-442a-91ab-27e0adc1810b", "codigo": "11", "nome": "PINHEIRO MACHADO", "descricao": "POSTO ROTA 293 PINHEIRO MACHADO", "cnpj": "73.856.155/0002-89"},
+        {"postoId": "85d3091d-af31-4cb5-86fc-1558aaefa19b", "codigo": "12", "nome": "POA IPIRANGA", "descricao": "POSTO DE COMB AVENIDA IPIRANGA LTDA", "cnpj": "32.627.270/0002-02"},
+        {"postoId": "73a32cc3-d7ac-48d7-91d7-9046045d0bd7", "codigo": "3", "nome": "PORTO ALEGRE", "descricao": "ROTA POA COMERCIO DE COMBUSTIVEIS LTDA", "cnpj": "32.627.270/0001-13"},
+        {"postoId": "fb3db4cb-742b-4583-aaff-c6faa66c0605", "codigo": "18", "nome": "PROTÁSIO", "descricao": "AGUIA ABASTECEDORA DE COMBUSTIVEIS LTDA (PROTÁSIO)", "cnpj": "10.401.915/0004-05"},
+        {"postoId": "d5ecbd61-8d4a-4ac6-8cc9-7c4919ead401", "codigo": "7", "nome": "ROTA DO SOL", "descricao": "POSTO ROTA 101 DERIVADOS DE PETROLEO LTDA", "cnpj": "28.583.917/0003-47"},
+        {"postoId": "eb84222f-2e6b-4f68-8457-760d10e24043", "codigo": "13", "nome": "SEBERI", "descricao": "ROTA - SEBERI - BANCO DO BRASIL", "cnpj": "59.425.936/0001-07"},
+        {"postoId": "4d49850f-ebf1-433d-a32a-527b54e856aa", "codigo": "2", "nome": "TERRA DE AREIA", "descricao": "POSTO ROTA 101 DERIVADOS DE PETROLEO LTDA", "cnpj": "28.583.917/0001-85"},
+        {"postoId": "3885ddf8-f0ac-4468-98ab-97a248e29150", "codigo": "99", "nome": "TRANSPORTADORA", "descricao": "ROTA TRANSPORTES E LOGISTICA LTDA", "cnpj": "39.327.681/0001-32"},
+        {"postoId": "31147749-9465-49bc-acbd-cca61eae2e3a", "codigo": "17", "nome": "VIAMÃO", "descricao": "AGUIA ABASTECEDORA DE COMBUSTIVEIS LTDA", "cnpj": "10.401.915/0001-62"}
+    ]
+
+# Funcao de autenticacao MSAL
+@st.cache_data(ttl=3000)
+def obter_token_acesso():
+    if not all([TENANT_ID, CLIENT_ID, CLIENT_SECRET]):
+        return None
+    authority = f"https://login.microsoftonline.com/{TENANT_ID}"
+    app = msal.ConfidentialClientApplication(
+        CLIENT_ID, authority=authority, client_credential=CLIENT_SECRET
+    )
+    result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+    return result.get("access_token")
+
+# Funcao para obter filhos do OneDrive
+def obter_filhos(drive_id, item_id, token):
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/items/{item_id}/children"
+    children = []
+    while url:
+        res = requests.get(url, headers=headers)
+        if res.status_code != 200:
+            break
+        data = res.json()
+        children.extend(data.get("value", []))
+        url = data.get("@odata.nextLink")
+    return children
+
+# Funcao recursiva para buscar PDFs no OneDrive (excluindo 2024 e 2025)
+def buscar_arquivos_pdf_recursivo(drive_id, item_id, token, relative_path=""):
+    children = obter_filhos(drive_id, item_id, token)
+    pdfs = []
+    
+    for child in children:
+        name = child.get("name")
+        if "folder" in child:
+            if "2024" in name or "2025" in name:
+                continue
+            new_rel_path = f"{relative_path}/{name}" if relative_path else name
+            pdfs.extend(buscar_arquivos_pdf_recursivo(drive_id, child.get("id"), token, new_rel_path))
+        else:
+            if name.lower().endswith(".pdf"):
+                partes = relative_path.split("/")
+                conta = partes[1] if len(partes) > 1 else "Padrão"
+                
+                p_info = child.copy()
+                p_info["account"] = conta
+                pdfs.append(p_info)
+    return pdfs
+
+# Funcao para deduplicar PDFs
+def deduplicar_pdfs(arquivos_pdf):
+    grupos = {}
+    for p in arquivos_pdf:
+        name = p.get("name")
+        account = p.get("account", "Padrão")
+        match = re.match(r"^(\d{2}-\d{4})", name)
+        base_name = match.group(1) if match else Path(name).stem
+        
+        key = (account, base_name)
+        if key not in grupos:
+            grupos[key] = []
+        grupos[key].append(p)
+        
+    deduplicados = []
+    for key, files in grupos.items():
+        if len(files) == 1:
+            deduplicados.append(files[0])
+        else:
+            mais_recente = max(
+                files, 
+                key=lambda x: datetime.strptime(x.get("lastModifiedDateTime")[:19], "%Y-%m-%dT%H:%M:%S")
+            )
+            deduplicados.append(mais_recente)
+            
+    return sorted(deduplicados, key=lambda x: (x.get("account"), x.get("name")))
+
+# Helper de sobreposicao de data do arquivo
+def arquivo_sobrepoe_datas(nome_arquivo, start_date, end_date):
+    match = re.search(r"(\d{2})-(\d{4})", nome_arquivo)
+    if not match:
+        return True
+    m = int(match.group(1))
+    y = int(match.group(2))
+    
+    file_start = datetime(y, m, 1).date()
+    ultimo_dia = calendar.monthrange(y, m)[1]
+    file_end = datetime(y, m, ultimo_dia).date()
+    
+    return file_start <= end_date and start_date <= file_end
+
+# Parser de extrato PDF
+def parsear_extrato_pdf(conteudo_pdf, nome_arquivo):
+    match = re.search(r"(\d{2})-(\d{4})", nome_arquivo)
+    if not match:
+        return []
+    mes = match.group(1)
+    ano = match.group(2)
+    
+    pdf_file = io.BytesIO(conteudo_pdf)
+    reader = pypdf.PdfReader(pdf_file)
+    
+    registros = []
+    dia_atual = None
+    
+    for page in reader.pages:
+        text = page.extract_text()
+        if not text:
+            continue
+        linhas = text.split("\n")
+        for idx, linha in enumerate(linhas):
+            dia_match = re.match(r"^(\d{2})(?:\s{2,}|\s*$)", linha)
+            if dia_match:
+                dia_atual = dia_match.group(1)
+                conteudo_linha = linha[dia_match.end():].strip()
+            else:
+                conteudo_linha = linha.strip()
+                
+            if "PIX RECEBIDO" in conteudo_linha:
+                valor_match = re.search(r"([\d\.,]+)$", conteudo_linha)
+                if valor_match:
+                    valor_str = valor_match.group(1)
+                    valor_float = float(valor_str.replace(".", "").replace(",", "."))
+                else:
+                    valor_float = 0.0
+                
+                nome_pagador = ""
+                if idx + 1 < len(linhas):
+                    linha_seguinte = linhas[idx+1].strip()
+                    if linha_seguinte.startswith("NOME:"):
+                        nome_pagador = f" {linha_seguinte}"
+                        
+                descricao = f"PIX RECEBIDO{nome_pagador}"
+                data_completa = f"{dia_atual}/{mes}/{ano}" if dia_atual else f"Unknown/{mes}/{ano}"
+                
+                registros.append({
+                    "Data": data_completa,
+                    "Descrição": descricao,
+                    "Valor": valor_float
+                })
+    return registros
+
+# Funcao para buscar lancamentos da API financeira
+def obter_lancamentos_api(posto_id, ultimos_dias):
+    headers = {
+        "Content-Type": "application/json",
+        "mr-key": API_KEY
+    }
+    url = f"{API_URL}/v1/api/export/lancamentos/{posto_id}?ultimosDias={ultimos_dias}"
+    try:
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            return res.json().get("result", [])
+    except Exception:
+        pass
+    return []
+
+# --- INTERFACE STREAMLIT ---
+
+st.markdown('<div class="header-title">🔄 Reconciliação Financeira (Sistema MR vs PDF OneDrive)</div>', unsafe_allow_html=True)
+st.markdown('<div class="header-subtitle">Compare e cruze lançamentos do sistema MR com os extratos em PDF do Banrisul</div>', unsafe_allow_html=True)
+
+# 1. Carrega dados inicias
+nomes_empresas = [emp.get("nome") for emp in EMPRESAS]
+
+# 2. Configurações na sidebar
+with st.sidebar:
+    st.markdown("### Configurações")
+    empresa_nome = st.selectbox("Selecione o Cliente / Empresa:", nomes_empresas)
+    
+    # Datas do periodo
+    hoje = datetime.today().date()
+    # default de 1 mes atras
+    inicio_padrao = datetime(hoje.year, hoje.month, 1).date()
+    periodo_input = st.date_input(
+        "Selecione o período de análise:",
+        value=(inicio_padrao, hoje),
+        help="Escolha o intervalo de datas para buscar os lançamentos e extratos."
+    )
+    
+    # Processa o periodo
+    start_date, end_date = hoje, hoje
+    if isinstance(periodo_input, (tuple, list)) and len(periodo_input) == 2:
+        start_date, end_date = periodo_input
+    elif isinstance(periodo_input, (tuple, list)) and len(periodo_input) == 1:
+        start_date, end_date = periodo_input[0], periodo_input[0]
+    else:
+        start_date = end_date = periodo_input
+
+    # Carrega pastas de Clientes do OneDrive
+    token = obter_token_acesso()
+    pastas_onedrive = []
+    if token and DRIVE_ID and FOLDER_ID:
+        filhos = obter_filhos(DRIVE_ID, FOLDER_ID, token)
+        pastas_onedrive = [f for f in filhos if "folder" in f]
+    
+    # Mapeamento do Cliente selecionado para a pasta OneDrive
+    folder_onedrive_name = DE_PARA_POSTOS.get(empresa_nome)
+    pasta_cliente = None
+    if folder_onedrive_name and pastas_onedrive:
+        pasta_cliente = next((p for p in pastas_onedrive if p.get("name").lower() == folder_onedrive_name.lower()), None)
+
+    # Identificacao de subpastas/contas para o cliente no OneDrive
+    contas_disponiveis = ["Padrão"]
+    pdfs_cliente = []
+    if pasta_cliente and token:
+        pdfs_cliente = buscar_arquivos_pdf_recursivo(DRIVE_ID, pasta_cliente.get("id"), token)
+        if pdfs_cliente:
+            contas_disponiveis = sorted(list(set(p.get("account") for p in pdfs_cliente)))
+
+    # Filtro de Conta Bancaria
+    conta_selecionada = "Todos"
+    # O filtro de conta so deve de fato ser exibido se houver mais de uma conta no OneDrive
+    if len(contas_disponiveis) > 1 or (len(contas_disponiveis) == 1 and contas_disponiveis[0] != "Padrão"):
+        opcoes_contas = ["Todos"] + contas_disponiveis
+        conta_selecionada = st.selectbox(
+            "Selecione a Conta / Subpasta:",
+            options=opcoes_contas,
+            help="Filtrar por uma conta Banrisul específica"
+        )
+        
+    st.markdown("---")
+    st.markdown("**Status da Conexão:**")
+    if token:
+        st.success("🔑 Autenticação OneDrive: OK")
+    else:
+        st.error("🔑 Autenticação OneDrive: FALHA")
+
+# Layout de abas principais
+tab_rec, tab_depara = st.tabs(["🔄 Conciliação", "📋 De-Para de Postos"])
+
+with tab_depara:
+    st.markdown("### De-Para (Mapeamento de Nomes)")
+    st.write("A tabela abaixo apresenta a correspondência dos nomes cadastrados no Sistema MR e o nome de suas respectivas pastas de extratos no OneDrive:")
+    
+    dados_depara = []
+    for emp_sys in EMPRESAS:
+        sys_nome = emp_sys.get("nome")
+        sys_id = emp_sys.get("postoId")
+        od_folder = DE_PARA_POSTOS.get(sys_nome, "Não mapeado")
+        dados_depara.append({
+            "Nome no Sistema MR": sys_nome,
+            "ID no Sistema": sys_id,
+            "Pasta no OneDrive": od_folder if od_folder else "⚠️ Sem Pasta Mapeada"
+        })
+    df_depara_table = pd.DataFrame(dados_depara)
+    st.dataframe(df_depara_table, use_container_width=True)
+
+with tab_rec:
+    # Obter os dados da empresa selecionada
+    empresa = next(emp for emp in EMPRESAS if emp.get("nome") == empresa_nome)
+    posto_id = empresa.get("postoId")
+    
+    col_info1, col_info2 = st.columns([1, 2])
+    with col_info1:
+        st.markdown('<div class="card"><h4>Empresa Selecionada</h4>'
+                    f'<p><b>Posto:</b> {empresa.get("nome")}<br>'
+                    f'<b>ID do Sistema:</b> <code style="font-size:0.8rem;">{posto_id}</code><br>'
+                    f'<b>CNPJ:</b> {empresa.get("cnpj")}</p></div>', unsafe_allow_html=True)
+        
+        analisar_button = st.button("Executar Conciliação")
+        
+    with col_info2:
+        # Mostra os status dos arquivos que serao lidos
+        st.markdown("#### Status dos Arquivos PDF correspondentes no OneDrive")
+        if not pasta_cliente:
+            st.warning(f"Nenhuma pasta mapeada para o posto '{empresa_nome}' no OneDrive ou pasta inexistente.")
+        else:
+            # Filtra os PDFs pelo filtro de conta
+            if conta_selecionada != "Todos":
+                pdfs_filtrados_conta = [p for p in pdfs_cliente if p.get("account") == conta_selecionada]
+            else:
+                pdfs_filtrados_conta = pdfs_cliente
+                
+            pdfs_periodo = [p for p in deduplicar_pdfs(pdfs_filtrados_conta) if arquivo_sobrepoe_datas(p.get("name"), start_date, end_date)]
+            if pdfs_periodo:
+                for p in pdfs_periodo:
+                    acc_label = f"({p.get('account')})" if p.get('account') != "Padrão" else ""
+                    st.write(f"📄 {p.get('name')} {acc_label}")
+            else:
+                st.info("Nenhum arquivo PDF encontrado no período selecionado.")
+
+    st.markdown("---")
+
+    if analisar_button:
+        # Se nao houver pasta ou token
+        if not token:
+            st.error("Erro de autenticação no OneDrive.")
+            st.stop()
+            
+        with st.spinner("Realizando consulta ao Sistema MR e lendo extratos em PDF..."):
+            # 1. Carrega dados do sistema MR
+            ultimos_dias = (hoje - start_date).days
+            # Garante que puxa pelo menos o periodo necessario
+            if ultimos_dias < 30:
+                ultimos_dias = 30
+            
+            lancamentos_brutos = obter_lancamentos_api(posto_id, ultimos_dias)
+            
+            # Filtra lançamentos do sistema pelas regras
+            # Regras:
+            # - Descrição contém "PIX RECEBIDO"
+            # - Categoria é "1.9 - TED/DOC/PIX"
+            # - Banco contém "BANRISUL"
+            # - Data está no intervalo selecionado
+            lancamentos_sistema = []
+            for item in lancamentos_brutos:
+                descricao = str(item.get("descricao", ""))
+                categoria = str(item.get("categoria", ""))
+                banco = str(item.get("conta", ""))
+                data_original = item.get("data", "") # YYYY-MM-DD
+                
+                try:
+                    dt = datetime.strptime(data_original, "%Y-%m-%d").date()
+                except Exception:
+                    continue
+                
+                if (
+                    start_date <= dt <= end_date and
+                    "PIX RECEBIDO" in descricao.upper() and
+                    categoria == "1.9 - TED/DOC/PIX" and
+                    "BANRISUL" in banco.upper()
+                ):
+                    # Formata data para DD/MM/YYYY
+                    data_formatada = dt.strftime("%d/%m/%Y")
+                    
+                    lancamentos_sistema.append({
+                        "Posto": empresa_nome,
+                        "dataSistema": data_formatada,
+                        "dateObj": dt,
+                        "CategoriaSistema": categoria,
+                        "ValorSistema": float(item.get("valor", 0)),
+                        "ContaBancariaSistema": banco,
+                        "DescriçõesPDF": ""
+                    })
+
+            # 2. Carrega e parseia arquivos PDF do OneDrive
+            pdf_transacoes = []
+            if pasta_cliente and pdfs_periodo:
+                for p in pdfs_periodo:
+                    download_url = p.get("@microsoft.graph.downloadUrl")
+                    if download_url:
+                        res = requests.get(download_url)
+                        if res.status_code == 200:
+                            registros = parsear_extrato_pdf(res.content, p.get("name"))
+                            for r in registros:
+                                r["Conta"] = p.get("account") # subpasta da conta
+                                pdf_transacoes.append(r)
+
+            # 3. Conciliação / Cruzamento
+            tabela_conciliada = []
+            matched_count = 0
+            unmatched_count = 0
+            
+            # Identifica se vamos forçar correspondência de conta (se houver mais de 1 conta no PDF)
+            enforce_account = len(contas_disponiveis) > 1 or (len(contas_disponiveis) == 1 and contas_disponiveis[0] != "Padrão")
+            
+            for s_tx in lancamentos_sistema:
+                s_date_str = s_tx["dataSistema"]
+                s_val = s_tx["ValorSistema"]
+                s_banco = s_tx["ContaBancariaSistema"].upper()
+                
+                # Procura correspondentes no PDF
+                matching_pdfs = []
+                for p_tx in pdf_transacoes:
+                    p_date_str = p_tx["Data"]
+                    p_val = p_tx["Valor"]
+                    p_acc = p_tx["Conta"].upper()
+                    
+                    # Checa data e valor
+                    date_match = (p_date_str == s_date_str)
+                    value_match = (abs(p_val - s_val) < 0.01)
+                    
+                    # Checa conta bancaria (se houver mais de uma)
+                    acc_match = True
+                    if enforce_account:
+                        # O numero da conta no PDF (ex: '0609154107') deve estar contido na string de banco do sistema (ex: 'BANRISUL 0609154107')
+                        acc_match = (p_acc in s_banco)
+                        
+                    if date_match and value_match and acc_match:
+                        matching_pdfs.append(p_tx)
+                
+                # Se houver match
+                if matching_pdfs:
+                    # Concatena todas as descrições dos registros PDF correspondentes separando por |
+                    descriptions = [x["Descrição"] for x in matching_pdfs]
+                    s_tx["DescriçõesPDF"] = " | ".join(sorted(list(set(descriptions))))
+                    matched_count += 1
+                else:
+                    s_tx["DescriçõesPDF"] = "❌ NÃO ENCONTRADO NO EXTRATO PDF"
+                    unmatched_count += 1
+                    
+                tabela_conciliada.append({
+                    "Posto": s_tx["Posto"],
+                    "dataSistema": s_tx["dataSistema"],
+                    "CategoriaSistema": s_tx["CategoriaSistema"],
+                    "ValorSistema": s_tx["ValorSistema"],
+                    "ContaBancariaSistema": s_tx["ContaBancariaSistema"],
+                    "DescriçõesPDF": s_tx["DescriçõesPDF"]
+                })
+
+            # Exibe os resultados
+            if not tabela_conciliada:
+                st.warning("Nenhum lançamento no Sistema MR corresponde às regras de filtro para o período selecionado.")
+            else:
+                df_resultado = pd.DataFrame(tabela_conciliada)
+                
+                # Métricas de Conciliação
+                st.markdown("### Métricas de Conciliação")
+                mc1, mc2, mc3 = st.columns(3)
+                mc1.metric("Lançamentos Sistema", len(df_resultado))
+                mc2.metric("Conciliados (Match PDF)", f"{matched_count} ({matched_count/len(df_resultado)*100:.1f}%)")
+                mc3.metric("Não Conciliados", f"{unmatched_count} ({unmatched_count/len(df_resultado)*100:.1f}%)")
+                
+                st.markdown("---")
+                st.markdown("### Tabela Comparativa de Conciliação")
+                
+                # Formata exibição da tabela
+                df_exibicao = df_resultado.copy()
+                df_exibicao["ValorSistema"] = df_exibicao["ValorSistema"].map(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                
+                st.dataframe(df_exibicao, use_container_width=True)
+                
+                # Exportação
+                csv = df_resultado.to_csv(index=False).encode('utf-8')
+                
+                col_dl1, col_dl2 = st.columns(2)
+                with col_dl1:
+                    st.download_button(
+                        label="Exportar para CSV",
+                        data=csv,
+                        file_name=f"CONCILIACAO_{empresa_nome}_{start_date.strftime('%d-%m-%Y')}_a_{end_date.strftime('%d-%m-%Y')}.csv",
+                        mime="text/csv",
+                    )
+                with col_dl2:
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df_resultado.to_excel(writer, index=False, sheet_name='Conciliação')
+                    excel_data = output.getvalue()
+                    
+                    st.download_button(
+                        label="Exportar para Excel",
+                        data=excel_data,
+                        file_name=f"CONCILIACAO_{empresa_nome}_{start_date.strftime('%d-%m-%Y')}_a_{end_date.strftime('%d-%m-%Y')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
