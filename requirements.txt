@@ -1,4 +1,4 @@
-﻿altair==5.4.1
+altair==5.4.1
 annotated-types==0.7.0
 attrs==24.2.0
 blinker==1.8.2
@@ -56,11 +56,11 @@ num2words==0.5.13
 google-generativeai
 gspread
 google-auth-oauthlib
-pandas
 oauth2client
 google-auth-httplib2
 plotly
 streamlit-option-menu
 ofxparse
-
-
+streamlit
+msal
+pypdf
