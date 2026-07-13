@@ -132,11 +132,21 @@ carregar_env()
 
 # Helper para obter configuracoes do st.secrets (Streamlit Cloud) com fallback para os.environ (.env local)
 def obter_config(key, default=None):
+    # Tenta st.secrets.get() — funciona para chaves de nivel raiz no Streamlit Cloud
     try:
-        if key in st.secrets:
-            return st.secrets[key]
+        val = st.secrets.get(key)
+        if val is not None:
+            return str(val)
     except Exception:
         pass
+    # Tenta acesso direto por atributo (e.g. st.secrets.TENANT_ID)
+    try:
+        val = getattr(st.secrets, key, None)
+        if val is not None:
+            return str(val)
+    except Exception:
+        pass
+    # Fallback para variaveis de ambiente (.env local)
     return os.environ.get(key, default)
 
 # Configuracoes do Microsoft Graph
