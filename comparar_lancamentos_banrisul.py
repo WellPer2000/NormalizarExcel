@@ -8,6 +8,7 @@ import streamlit as st
 import pypdf
 import io
 import calendar
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -379,10 +380,31 @@ with st.sidebar:
         pastas_onedrive = [f for f in filhos if "folder" in f]
     
     # Mapeamento do Cliente selecionado para a pasta OneDrive
-    folder_onedrive_name = DE_PARA_POSTOS.get(empresa_nome)
+    # Normaliza unicode para evitar diferenças de encoding (NFC vs NFD) vindas do st.secrets
+    def norm(s):
+        return unicodedata.normalize("NFC", str(s)).strip() if s else ""
+    
+    empresa_nome_norm = norm(empresa_nome)
+    folder_onedrive_name = next(
+        (v for k, v in DE_PARA_POSTOS.items() if norm(k) == empresa_nome_norm),
+        None
+    )
     pasta_cliente = None
     if folder_onedrive_name and pastas_onedrive:
-        pasta_cliente = next((p for p in pastas_onedrive if p.get("name").lower() == folder_onedrive_name.lower()), None)
+        pasta_cliente = next((p for p in pastas_onedrive if norm(p.get("name")) == norm(folder_onedrive_name)), None)
+    
+    # Debug temporário — exibe diagnóstico de conexão na sidebar
+    with st.sidebar:
+        st.markdown("---")
+        with st.expander("🔍 Debug de Conexão", expanded=False):
+            st.write(f"**Empresa selecionada:** `{empresa_nome_norm}`")
+            st.write(f"**Pasta mapeada:** `{folder_onedrive_name}`")
+            st.write(f"**DRIVE_ID:** `{DRIVE_ID[:30] if DRIVE_ID else 'None'}...`")
+            st.write(f"**FOLDER_ID:** `{FOLDER_ID[:20] if FOLDER_ID else 'None'}...`")
+            st.write(f"**Pastas OneDrive encontradas:** {len(pastas_onedrive)}")
+            if pastas_onedrive:
+                st.write("Nomes:", [p.get('name') for p in pastas_onedrive[:5]])
+            st.write(f"**Pasta cliente:** `{pasta_cliente.get('name') if pasta_cliente else 'None'}`")
 
     # Identificacao de subpastas/contas para o cliente no OneDrive
     contas_disponiveis = ["Padrão"]
