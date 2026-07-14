@@ -295,44 +295,57 @@ def parsear_extrato_pdf(conteudo_pdf, nome_arquivo):
     pdf_file = io.BytesIO(conteudo_pdf)
     reader = pypdf.PdfReader(pdf_file)
     
+    # Coleta todas as linhas do PDF inteiro para permitir busca de descrição cruzando quebras de página
+    linhas = []
+    for page in reader.pages:
+        text = page.extract_text()
+        if text:
+            linhas.extend(text.split("\n"))
+            
     registros = []
     dia_atual = None
     
-    for page in reader.pages:
-        text = page.extract_text()
-        if not text:
-            continue
-        linhas = text.split("\n")
-        for idx, linha in enumerate(linhas):
-            dia_match = re.match(r"^(\d{2})(?:\s{2,}|\s*$)", linha)
-            if dia_match:
-                dia_atual = dia_match.group(1)
-                conteudo_linha = linha[dia_match.end():].strip()
+    for idx, linha in enumerate(linhas):
+        dia_match = re.match(r"^(\d{2})(?:\s{2,}|\s*$)", linha)
+        if dia_match:
+            dia_atual = dia_match.group(1)
+            conteudo_linha = linha[dia_match.end():].strip()
+        else:
+            conteudo_linha = linha.strip()
+            
+        if "PIX RECEBIDO" in conteudo_linha:
+            valor_match = re.search(r"([\d\.,]+)$", conteudo_linha)
+            if valor_match:
+                valor_str = valor_match.group(1)
+                valor_float = float(valor_str.replace(".", "").replace(",", "."))
             else:
-                conteudo_linha = linha.strip()
-                
-            if "PIX RECEBIDO" in conteudo_linha:
-                valor_match = re.search(r"([\d\.,]+)$", conteudo_linha)
-                if valor_match:
-                    valor_str = valor_match.group(1)
-                    valor_float = float(valor_str.replace(".", "").replace(",", "."))
-                else:
-                    valor_float = 0.0
-                
-                nome_pagador = ""
-                if idx + 1 < len(linhas):
-                    linha_seguinte = linhas[idx+1].strip()
-                    if linha_seguinte.startswith("NOME:"):
-                        nome_pagador = f" {linha_seguinte}"
-                        
-                descricao = f"PIX RECEBIDO{nome_pagador}"
-                data_completa = f"{dia_atual}/{mes}/{ano}" if dia_atual else f"Unknown/{mes}/{ano}"
-                
-                registros.append({
-                    "Data": data_completa,
-                    "Descrição": descricao,
-                    "Valor": valor_float
-                })
+                valor_float = 0.0
+            
+            nome_pagador = ""
+            # Procura a linha com "NOME:" nas próximas linhas (máximo de 15 linhas à frente)
+            # para contemplar quando a descrição fica na página seguinte devido à quebra de página
+            for j in range(idx + 1, min(idx + 16, len(linhas))):
+                proxima_linha = linhas[j].strip()
+                if not proxima_linha:
+                    continue
+                if proxima_linha.startswith("NOME:"):
+                    nome_pagador = f" {proxima_linha}"
+                    break
+                # Se encontrarmos uma nova transação ou início de bloco de dia, interrompe a busca
+                if re.match(r"^\d{2}\s+", proxima_linha) or re.search(r"\d+,\d{2}[-D]?\s*$", proxima_linha):
+                    break
+                keywords = ["TED", "DOC", "PIX RECEBIDO", "PAGAMENTO", "COMPRA", "CREDITO", "DEBITO", "SALDO", "ANTECIPACAO", "COFRE", "BANRI", "APLICACAO", "TARIF", "JUROS"]
+                if any(proxima_linha.startswith(k) for k in keywords):
+                    break
+                    
+            descricao = f"PIX RECEBIDO{nome_pagador}"
+            data_completa = f"{dia_atual}/{mes}/{ano}" if dia_atual else f"Unknown/{mes}/{ano}"
+            
+            registros.append({
+                "Data": data_completa,
+                "Descrição": descricao,
+                "Valor": valor_float
+            })
     return registros
 
 # Funcao para buscar lancamentos da API financeira
