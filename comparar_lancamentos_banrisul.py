@@ -74,7 +74,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Funcao para verificar credenciais no st.secrets ou fallback local
+# Funcao para verificar credenciais no st.secrets
 def verificar_login(usuario, senha):
     try:
         if "users" in st.secrets:
@@ -82,11 +82,7 @@ def verificar_login(usuario, senha):
             if usuario in users_dict and users_dict[usuario] == senha:
                 return True
     except Exception:
-        # st.secrets nao esta configurado localmente
         pass
-    # Fallback local de seguranca conforme solicitado
-    if usuario == "conciliacao" and senha == "Mr130815@":
-        return True
     return False
 
 # Inicializacao do estado de login
