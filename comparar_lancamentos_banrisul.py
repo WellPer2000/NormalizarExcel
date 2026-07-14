@@ -155,30 +155,6 @@ FOLDER_ID = obter_config("ONEDRIVE_FOLDER_ID")
 API_URL = obter_config("API_URL")
 API_KEY = obter_config("API_KEY")
 
-# De-Para de Postos (Mapeamento Sistema MR -> Pastas OneDrive)
-DE_PARA_POSTOS = {
-    "ARARANGUÁ": "Ararangua",
-    "BARRA DO TURVO": "São Paulo",
-    "CANDIOTA": "Candiota",
-    "CANOAS": "Canoas",
-    "CRISTAL": "Cristal",
-    "ELDORADO": "Eldorado",
-    "GRAVATAI": "Gravataí",
-    "JAGUARUNA": "Jaguaruna",
-    "PARADOURO": "Paradouro",
-    "PARADOURO RESTAURANTE": "Restaurante 86",
-    "PINHEIRO MACHADO": "Pinheiro Machado",
-    "POA IPIRANGA": "Ipiranga",
-    "PORTO ALEGRE": "Porto Alegre",
-    "PROTÁSIO": "Protásio",
-    "ROTA DO SOL": "Caminho do sol",
-    "SEBERI": "Seberi",
-    "TERRA DE AREIA": "Terra de Areia",
-    "TRANSPORTADORA": "Transportadora",
-    "VIAMÃO": "Viamão",
-    "PERIMETRAL": None  # Sem pasta mapeada no OneDrive
-}
-
 # Lista de empresas do Sistema MR (carregada obrigatoriamente do Streamlit Secrets)
 EMPRESAS = []
 try:
@@ -190,6 +166,9 @@ except Exception:
 if not EMPRESAS:
     st.error("❌ A lista de EMPRESAS não foi configurada nos Secrets do Streamlit. Por favor, adicione os segredos nas configurações do app.")
     st.stop()
+
+# De-Para de Postos (Mapeamento construído dinamicamente a partir das configurações do Secrets)
+DE_PARA_POSTOS = {emp.get("nome"): emp.get("pastaOneDrive") for emp in EMPRESAS if emp.get("nome")}
 
 # Funcao de autenticacao MSAL
 @st.cache_data(ttl=3000)
